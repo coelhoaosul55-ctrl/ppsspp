@@ -75,6 +75,10 @@ void BuildControlsSettings(SettingsPage *page) {
 		page->Setting(&g_Config.bHapticFeedback);
 	}
 
+#if PPSSPP_PLATFORM(ANDROID)
+	page->Setting(&g_Config.iGamepadRumble);
+#endif
+
 	page->Header("Analog to digital mapping");
 	page->Setting(&g_Config.fAnalogTriggerThreshold);
 	page->Setting(&g_Config.fAnalogStickThreshold);

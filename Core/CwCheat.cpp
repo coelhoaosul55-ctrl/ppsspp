@@ -889,13 +889,17 @@ void CWCheatEngine::ExecuteOp(const CheatOperation &op, const CheatCode &cheat, 
 		if (Memory::IsValidRange(op.addr, 8)) {
 			uint16_t checkLeftVibration = Memory::ReadUnchecked_U16(op.addr);
 			uint16_t checkRightVibration = Memory::ReadUnchecked_U16(op.addr + 0x2);
+			// Fork behavior: the request is consumed (zeroed) once read, so a game-side hook can fire a
+			// one-shot pulse (a gunshot, say) by writing the words, instead of re-triggering every frame.
 			if (checkLeftVibration > 0) {
 				SetLeftVibration(checkLeftVibration);
 				SetVibrationLeftDropout(Memory::ReadUnchecked_U8(op.addr + 0x4));
+				Memory::WriteUnchecked_U16(0, op.addr);
 			}
 			if (checkRightVibration > 0) {
 				SetRightVibration(checkRightVibration);
 				SetVibrationRightDropout(Memory::ReadUnchecked_U8(op.addr + 0x6));
+				Memory::WriteUnchecked_U16(0, op.addr + 0x2);
 			}
 		}
 		break;

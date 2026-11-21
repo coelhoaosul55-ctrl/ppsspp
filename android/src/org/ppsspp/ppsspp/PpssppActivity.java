@@ -1961,6 +1961,17 @@ public class PpssppActivity extends AppCompatActivity implements SensorEventList
 				Log.e(TAG, "Can't vibrate, no surface view");
 			}
 			return true;
+		} else if (command.equals("rumble")) {
+			// params: "left:right", each 0-65535. Drives a connected game controller's motors.
+			try {
+				String[] parts = params.split(":");
+				int l = Integer.parseInt(parts[0]);
+				int r = Integer.parseInt(parts[1]);
+				rumbleGamepad(l, r);
+			} catch (Exception e) {
+				Log.e(TAG, "rumble failed: " + e);
+			}
+			return true;
 		} else if (command.equals("finish")) {
 			Log.i(TAG, "Setting shuttingDown = true and calling Finish");
 			shuttingDown = true;
@@ -2414,5 +2425,51 @@ public class PpssppActivity extends AppCompatActivity implements SensorEventList
 			}
 		}
 		return tombstones;
+	}
+
+	private int findGamepadId() {
+		for (int id : android.view.InputDevice.getDeviceIds()) {
+			android.view.InputDevice d = android.view.InputDevice.getDevice(id);
+			if (d == null) continue;
+			int src = d.getSources();
+			if ((src & android.view.InputDevice.SOURCE_GAMEPAD) == android.view.InputDevice.SOURCE_GAMEPAD
+					|| (src & android.view.InputDevice.SOURCE_JOYSTICK) == android.view.InputDevice.SOURCE_JOYSTICK) {
+				return id;
+			}
+		}
+		return -1;
+	}
+
+	// l and r are 0-65535 (PSP-side vibration values). 0/0 cancels.
+	private void rumbleGamepad(int l, int r) {
+		int id = findGamepadId();
+		if (id < 0 || Build.VERSION.SDK_INT < 31) {
+			return;
+		}
+		android.view.InputDevice dev = android.view.InputDevice.getDevice(id);
+		android.os.VibratorManager vm = dev.getVibratorManager();
+		int[] ids = vm.getVibratorIds();
+		if (ids.length == 0) {
+			return;
+		}
+		if (l <= 0 && r <= 0) {
+			vm.cancel();
+			return;
+		}
+		int ampL = Math.max(1, Math.min(255, l * 255 / 65535));
+		int ampR = Math.max(1, Math.min(255, r * 255 / 65535));
+		// Short one-shots; a new one is sent whenever the value changes, so decay is smooth.
+		final long dur = 60;
+		android.os.CombinedVibration cv;
+		if (ids.length >= 2) {
+			cv = android.os.CombinedVibration.startParallel()
+					.addVibrator(ids[0], android.os.VibrationEffect.createOneShot(dur, l > 0 ? ampL : 1))
+					.addVibrator(ids[1], android.os.VibrationEffect.createOneShot(dur, r > 0 ? ampR : 1))
+					.combine();
+		} else {
+			cv = android.os.CombinedVibration.createParallel(
+					android.os.VibrationEffect.createOneShot(dur, Math.max(ampL, ampR)));
+		}
+		vm.vibrate(cv);
 	}
 }

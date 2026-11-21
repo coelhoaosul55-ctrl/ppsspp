@@ -101,6 +101,7 @@ struct JNIEnv {};
 #include "Common/TimeUtil.h"
 
 #include "Core/CmdLine.h"
+#include "Core/HLE/sceCtrl.h"
 #include "Core/Config.h"
 #include "Core/ConfigValues.h"
 #include "Core/Loaders.h"
@@ -324,6 +325,22 @@ void System_Vibrate(int length_ms) {
 	char temp[32];
 	snprintf(temp, sizeof(temp), "%d", length_ms);
 	PushCommand("vibrate", temp);
+}
+
+// Forwards the PSP-side vibration state (set by CwCheat vibration codes, which the original PSP
+// had no way to use) to a connected game controller, scaled by the user's 0-100% setting.
+static void UpdateGamepadRumble() {
+	static int lastL = 0, lastR = 0;
+	const int scale = std::clamp(g_Config.iGamepadRumble, 0, 100);
+	int l = (int)sceCtrlGetLeftVibration() * scale / 100;
+	int r = (int)sceCtrlGetRightVibration() * scale / 100;
+	if (l == lastL && r == lastR)
+		return;
+	lastL = l;
+	lastR = r;
+	char temp[48];
+	snprintf(temp, sizeof(temp), "%d:%d", l, r);
+	PushCommand("rumble", temp);
 }
 
 void System_LaunchUrl(LaunchUrlType urlType, std::string_view url) {
@@ -1846,6 +1863,7 @@ static void RenderLoopThread(ANativeWindow *wnd, GraphicsContext *graphicsContex
 		ApplyPendingResize();
 		NativeFrame(graphicsContext);
 		ProcessFrameCommands();
+		UpdateGamepadRumble();
 		if (g_Config.bPerformanceHints) {
 			perfHint.ReportFrame();
 		}
