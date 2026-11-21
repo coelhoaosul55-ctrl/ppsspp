@@ -129,7 +129,7 @@ bool RunMainLoop(GraphicsContext *graphicsContext, Application *application, std
 	return true;
 }
 
-void RunGraphicsLoop(GraphicsContext *graphicsContext, Application *application, std::function<bool(GraphicsContext *)> frame, std::function<bool()> shouldExit) {
+void RunGraphicsLoop(GraphicsContext *graphicsContext, Application *application, std::function<bool(GraphicsContext *)> frame, std::function<bool()> shouldExit, std::function<void()> renderThreadTick) {
 	if (!graphicsContext->NeedsSeparateEmuThread()) {
 		// The backend spawns its own render thread, so this thread is simply where emulation runs.
 		SetCurrentThreadName("EmuThread");
@@ -169,6 +169,9 @@ void RunGraphicsLoop(GraphicsContext *graphicsContext, Application *application,
 	while (!(shouldExit && shouldExit())) {
 		if (!graphicsContext->ThreadFrame()) {
 			break;
+		}
+		if (renderThreadTick) {
+			renderThreadTick();
 		}
 	}
 

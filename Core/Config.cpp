@@ -1035,6 +1035,9 @@ static constexpr ConfigSetting graphicsSettings[] = {
 	ConfigSetting("SustainedPerformanceMode", SETTING(g_Config, bSustainedPerformanceMode), false, CfgFlag::PER_GAME)
 		.Label(I18NCat::SYSTEM, "Sustained performance mode"),
 
+	ConfigSetting("PerformanceHints", SETTING(g_Config, bPerformanceHints), true, CfgFlag::DEFAULT)
+		.Label(I18NCat::SYSTEM, "Performance hints (avoid slowdown without touch)"),
+
 	ConfigSetting("ReplaceTextures", SETTING(g_Config, bReplaceTextures), true, CfgFlag::PER_GAME | CfgFlag::REPORT)
 		.Label(I18NCat::DEVELOPER, "Replace textures"),
 	ConfigSetting("SaveNewTextures", SETTING(g_Config, bSaveNewTextures), false, CfgFlag::PER_GAME | CfgFlag::REPORT)

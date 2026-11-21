@@ -290,6 +290,10 @@ void BuildGeneralSettings(SettingsPage *page, SystemPageState *state) {
 		});
 	}
 
+#if PPSSPP_PLATFORM(ANDROID)
+	page->Setting(&g_Config.bPerformanceHints);
+#endif
+
 	page->Header();
 
 	page->Setting(&g_Config.bCheckForNewVersion);

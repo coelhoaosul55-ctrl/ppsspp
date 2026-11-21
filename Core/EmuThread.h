@@ -61,4 +61,6 @@ bool RunMainLoop(GraphicsContext *graphicsContext, Application *application, std
 // shouldExit is optional, but required if you might run this in VR: while the session is idle
 // (in the background, for one) no frame runs, so the frame callback can't say emulation is done.
 // NOTE: Does take ownership over Application (which is just a wrapper for NativeInitGraphics/NativeShutdownGraphics/NativeFrame).
-void RunGraphicsLoop(GraphicsContext *graphicsContext, Application *application, std::function<bool(GraphicsContext *)> frame, std::function<bool()> shouldExit = nullptr);
+// renderThreadTick, if given, is called on the render thread after each ThreadFrame() when the backend
+// needs a separate emu thread (OpenGL). It is never called otherwise.
+void RunGraphicsLoop(GraphicsContext *graphicsContext, Application *application, std::function<bool(GraphicsContext *)> frame, std::function<bool()> shouldExit = nullptr, std::function<void()> renderThreadTick = nullptr);

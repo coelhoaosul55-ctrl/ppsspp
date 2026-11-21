@@ -1837,20 +1837,31 @@ static void RenderLoopThread(ANativeWindow *wnd, GraphicsContext *graphicsContex
 
 	renderer_inited = true;
 	// The frame callback runs on the emu thread, which with OpenGL isn't this one.
-	PerformanceHintSession perfHint;
+	PerformanceHintSession perfHint("EmuThread");
+	// With OpenGL, this thread (the render thread) executes the GL commands the emu thread queues. It
+	// needs its own session, since the one above only covers the emu thread. It can run several tasks
+	// per frame, so batch the reports to roughly once per frame.
+	PerformanceHintSession renderPerfHint("RenderThread", 1000000000LL / 60);
 	const auto frame = [&perfHint](GraphicsContext *graphicsContext) {
 		ApplyPendingResize();
 		NativeFrame(graphicsContext);
 		ProcessFrameCommands();
-		perfHint.ReportFrame();
+		if (g_Config.bPerformanceHints) {
+			perfHint.ReportFrame();
+		}
 		return !exitRenderLoop;
+	};
+	const auto renderTick = [&renderPerfHint]() {
+		if (g_Config.bPerformanceHints) {
+			renderPerfHint.ReportFrame();
+		}
 	};
 	// Both backends share one lifecycle now, which is the point of all this: RunGraphicsLoop picks
 	// the thread arrangement the context needs and doesn't return until emulation is done. Windows
 	// and headless go through the same function, via MainThreadFunc.
 	// We have to hand it exitRenderLoop as well as the frame callback - in VR the loop can be
 	// parked waiting for the session to come back, where the callback is never reached.
-	RunGraphicsLoop(graphicsContext, new NativeApplication(), frame, []() { return exitRenderLoop.load(); });
+	RunGraphicsLoop(graphicsContext, new NativeApplication(), frame, []() { return exitRenderLoop.load(); }, renderTick);
 
 	renderer_inited = false;
 

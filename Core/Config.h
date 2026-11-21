@@ -345,6 +345,7 @@ public:
 	bool bDisplayCropTo16x9;  // Crops to 16:9 if the resolution is very close.
 
 	bool bSustainedPerformanceMode;  // Android: Slows clocks down to avoid overheating/speed fluctuations.
+	bool bPerformanceHints;  // Android 13+: ADPF hint sessions for the emu and render threads, to stop clocks dropping when idle (no touch).
 
 	bool bShowImDebugger;
 

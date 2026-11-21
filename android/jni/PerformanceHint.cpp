@@ -36,6 +36,8 @@ struct HintApi {
 	APerformanceHintSession *(*createSession)(APerformanceHintManager *, const int32_t *, size_t, int64_t);
 	int (*reportActualWorkDuration)(APerformanceHintSession *, int64_t);
 	void (*closeSession)(APerformanceHintSession *);
+	// API 35 (Android 15). Optional: without it we just keep the default.
+	int (*setPreferPowerEfficiency)(APerformanceHintSession *, bool);
 
 	bool Load() {
 		void *lib = dlopen("libandroid.so", RTLD_NOW);
@@ -46,6 +48,7 @@ struct HintApi {
 		createSession = (decltype(createSession))dlsym(lib, "APerformanceHint_createSession");
 		reportActualWorkDuration = (decltype(reportActualWorkDuration))dlsym(lib, "APerformanceHint_reportActualWorkDuration");
 		closeSession = (decltype(closeSession))dlsym(lib, "APerformanceHint_closeSession");
+		setPreferPowerEfficiency = (decltype(setPreferPowerEfficiency))dlsym(lib, "APerformanceHint_setPreferPowerEfficiency");
 		return getManager && createSession && reportActualWorkDuration && closeSession;
 	}
 };
@@ -66,7 +69,18 @@ int64_t ThreadCpuTimeNs() {
 	return (int64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
 }
 
+int64_t MonotonicNs() {
+	timespec ts;
+	if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) {
+		return -1;
+	}
+	return (int64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
+}
+
 }  // namespace
+
+PerformanceHintSession::PerformanceHintSession(const char *name, int64_t minReportIntervalNs)
+	: name_(name), minIntervalNs_(minReportIntervalNs) {}
 
 PerformanceHintSession::~PerformanceHintSession() {
 	if (session_) {
@@ -84,15 +98,35 @@ void PerformanceHintSession::ReportFrame() {
 		const int32_t tid = gettid();
 		session_ = manager ? api->createSession(manager, &tid, 1, TARGET_WORK_NS) : nullptr;
 		if (!session_) {
-			INFO_LOG(Log::System, "Performance hint sessions not available");
+			INFO_LOG(Log::System, "Performance hint session not available for %s (thread %d)", name_, tid);
 			failed_ = true;
 			return;
 		}
-		INFO_LOG(Log::System, "Performance hint session created for thread %d, target %d us", tid, (int)(TARGET_WORK_NS / 1000));
+		// Android 15+: tell the system we want speed here, not battery. Without this, some vendors'
+		// power HALs still favour efficiency for a thread that is mostly idle.
+		int preferResult = -1;
+		if (api->setPreferPowerEfficiency) {
+			preferResult = api->setPreferPowerEfficiency(session_, false);
+		}
+		INFO_LOG(Log::System, "Performance hint session created for %s (thread %d), target %d us, preferPowerEfficiency(false)=%s",
+			name_, tid, (int)(TARGET_WORK_NS / 1000), api->setPreferPowerEfficiency ? (preferResult == 0 ? "ok" : "failed") : "n/a");
 	}
-	const int64_t now = ThreadCpuTimeNs();
-	if (lastCpuTimeNs_ >= 0 && now > lastCpuTimeNs_) {
-		GetApi()->reportActualWorkDuration(session_, now - lastCpuTimeNs_);
+	const int64_t cpuNow = ThreadCpuTimeNs();
+	if (minIntervalNs_ > 0) {
+		// Batch up: only report once per interval, with all the CPU time used since the last report.
+		const int64_t wallNow = MonotonicNs();
+		if (lastReportWallNs_ < 0) {
+			lastReportWallNs_ = wallNow;
+			lastCpuTimeNs_ = cpuNow;
+			return;
+		}
+		if (wallNow - lastReportWallNs_ < minIntervalNs_) {
+			return;
+		}
+		lastReportWallNs_ = wallNow;
 	}
-	lastCpuTimeNs_ = now;
+	if (lastCpuTimeNs_ >= 0 && cpuNow > lastCpuTimeNs_) {
+		GetApi()->reportActualWorkDuration(session_, cpuNow - lastCpuTimeNs_);
+	}
+	lastCpuTimeNs_ = cpuNow;
 }
