@@ -55,11 +55,13 @@ jobs:
       #  with:
       #    ndk-version: r21e
 
-      - name: Test androidGitVersion
+      # The "Test androidGitVersion" step was removed: the task no longer exists (android/build.gradle.kts
+      # now computes the version itself), so running it made every build fail before compiling.
+      - name: Show version info
         run: |
           echo "count=${{steps.valid-tags.outputs.count}}"
-          gradle --quiet androidGitVersion
-      
+          git describe --tags --long || true
+
       - name: Assemble APK
         run: ./gradlew assemble${{ github.event.inputs.buildVariant }} --stacktrace
       
