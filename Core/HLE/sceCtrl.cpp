@@ -429,6 +429,35 @@ static void UpdateStarWarsEliteSquadronRumble() {
 	if (!isGame || !Memory::IsValidRange(kExplosionStrengthAddr, 4))
 		return;
 
+	// One-shot pack events: the cheat's hook stores 1 (jump pack) or 2 (jet pack) at kPackEventAddr when the
+	// player activates one. Each plays a short fixed pulse pattern (no distance involved).
+	static const u32 kPackEventAddr = 0x08803150;
+	struct PackPattern { int steps; int stepFrames; float level[5]; float left; float right; };
+	static const PackPattern kPatterns[2] = {
+		{ 3, 3, { 1.0f, 0.5f, 0.25f }, 0.40f, 0.90f },             // jump pack: quick snap
+		{ 5, 4, { 0.7f, 0.4f, 0.6f, 0.4f, 0.2f }, 0.80f, 0.45f },   // jet pack: longer rumble
+	};
+	static int packKind = -1, packFrame = 0;
+	const u32 ev = Memory::ReadUnchecked_U32(kPackEventAddr);
+	if (ev == 1 || ev == 2) {
+		Memory::WriteUnchecked_U32(0, kPackEventAddr);
+		packKind = (int)ev - 1;
+		packFrame = 0;
+	}
+	if (packKind >= 0) {
+		const PackPattern &pt = kPatterns[packKind];
+		const int step = packFrame / pt.stepFrames;
+		if (step >= pt.steps) {
+			packKind = -1;
+		} else {
+			const u16 l = (u16)(pt.level[step] * pt.left * 65535.0f);
+			const u16 r = (u16)(pt.level[step] * pt.right * 65535.0f);
+			if (l > leftVibration) { leftVibration = l; vibrationLeftDropout = 192; }
+			if (r > rightVibration) { rightVibration = r; vibrationRightDropout = 192; }
+			packFrame++;
+		}
+	}
+
 	// Diagnostics: report whether the cheat's game-side hook is installed (checked every ~5 s, shown on change).
 	static int diagTimer = 0;
 	static int hookState = -1;
