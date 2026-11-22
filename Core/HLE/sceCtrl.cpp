@@ -35,6 +35,7 @@
 #include "Core/HW/Display.h"
 #include "Core/System.h"
 #include "Core/Config.h"
+#include "Core/ELF/ParamSFO.h"
 #include "Core/MemMap.h"
 #include "Core/MemMapHelpers.h"
 #include "Core/MIPS/MIPS.h"
