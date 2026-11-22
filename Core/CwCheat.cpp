@@ -93,7 +93,17 @@ bool CheatFileParser::Parse() {
 
 void CheatFileParser::Flush() {
 	if (!pendingLines_.empty()) {
-		cheats_.push_back(CheatCode{lastCheatInfo_.name, pendingLines_, pendingFormat_});
+		CheatCode code{lastCheatInfo_.name, pendingLines_, pendingFormat_};
+		// Optional "[<n>ms]" tag in the name: per-cheat refresh interval.
+		const size_t tag = code.name.find('[');
+		if (tag != std::string::npos) {
+			int ms = 0;
+			char unit[4] = {};
+			if (sscanf(code.name.c_str() + tag, "[%d%2[mM]s]", &ms, unit) == 2 && ms > 0) {
+				code.intervalMs = std::min(ms, 10000);
+			}
+		}
+		cheats_.push_back(code);
 		pendingLines_.clear();
 	}
 	FlushCheatInfo();
@@ -250,6 +260,8 @@ static int GetRefreshMs() {
 	int refresh = g_Config.iCwCheatRefreshIntervalMs;
 	if (!cheatsEnabled) {
 		refresh = 1000;
+	} else if (cheatEngine) {
+		refresh = cheatEngine->MinIntervalMs(refresh);
 	}
 	return refresh;
 }
@@ -1471,7 +1483,15 @@ void CWCheatEngine::Run() {
 		return;
 	}
 
+	const u64 nowUs = CoreTiming::GetGlobalTimeUs();
+	const int globalMs = std::max(1, g_Config.iCwCheatRefreshIntervalMs);
 	for (CheatCode &cheat : cheats_) {
+		// Each cheat runs on its own interval; the shared timer just ticks at the smallest one.
+		const u64 intervalUs = (u64)(cheat.intervalMs > 0 ? cheat.intervalMs : globalMs) * 1000;
+		if (cheat.lastRunUs != 0 && nowUs - cheat.lastRunUs + 500 < intervalUs) {
+			continue;
+		}
+		cheat.lastRunUs = nowUs;
 		if (cheat.format == CheatCodeFormat::PSPAR) {
 			RunPSPAR(cheat);
 			continue;
@@ -1488,6 +1508,15 @@ void CWCheatEngine::Run() {
 			}
 		}
 	}
+}
+
+int CWCheatEngine::MinIntervalMs(int globalMs) const {
+	int m = std::max(1, globalMs);
+	for (const CheatCode &cheat : cheats_) {
+		if (cheat.intervalMs > 0)
+			m = std::min(m, cheat.intervalMs);
+	}
+	return m;
 }
 
 bool CWCheatEngine::HasCheats() {

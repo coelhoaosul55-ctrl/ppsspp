@@ -37,6 +37,10 @@ struct CheatCode {
 	std::string name;
 	std::vector<CheatLine> lines;
 	CheatCodeFormat format = CheatCodeFormat::CwCheat;
+	// Fork feature: a "[700ms]" tag in the cheat name gives this cheat its own refresh interval
+	// (0 = use the global interval from settings).
+	int intervalMs = 0;
+	uint64_t lastRunUs = 0;
 };
 
 struct CheatFileInfo {
@@ -69,6 +73,8 @@ public:
 	}
 	void Run();
 	bool HasCheats();
+	// Smallest interval any cheat needs, given the global one (so one timer can serve every cheat).
+	int MinIntervalMs(int globalMs) const;
 	// Replaces the parsed cheats, for tests.
 	void SetCheats(const std::vector<CheatCode> &cheats) {
 		cheats_ = cheats;
