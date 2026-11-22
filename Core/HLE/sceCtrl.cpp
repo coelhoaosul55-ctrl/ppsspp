@@ -419,6 +419,13 @@ retry:
 // into a short pulse pattern on the controller motors.
 static void UpdateStarWarsEliteSquadronRumble() {
 	static const u32 kExplosionStrengthAddr = 0x08803140;
+	static const u32 kPackEventAddr = 0x08803150;
+	// Tunables, written by the cheat file (a zero word/half means "use the default"):
+	//   +0x00 explosion  [L u16][R u16] motor strength 0..FFFF   +0x04 [frames/step u16][min level % u16]
+	//   +0x08 jump pack  [L u16][R u16]                          +0x0C [frames/step u16][unused]
+	//   +0x10 jet pack   [L u16][R u16]                          +0x14 [frames/step u16][unused]
+	//   +0x18 debug on-screen messages (non-zero = on)
+	static const u32 kParams = 0x08803180;
 	static bool isGame = false;
 	static std::string lastId;
 	const std::string id = g_paramSFO.GetValueString("DISC_ID");
@@ -426,12 +433,22 @@ static void UpdateStarWarsEliteSquadronRumble() {
 		lastId = id;
 		isGame = (id == "ULUS10390");
 	}
-	if (!isGame || !Memory::IsValidRange(kExplosionStrengthAddr, 4))
+	if (!isGame || !Memory::IsValidRange(kParams, 0x20))
 		return;
 
-	// One-shot pack events: the cheat's hook stores 1 (jump pack) or 2 (jet pack) at kPackEventAddr when the
-	// player activates one. Each plays a short fixed pulse pattern (no distance involved).
-	static const u32 kPackEventAddr = 0x08803150;
+	auto param16 = [&](u32 off, int hi) -> int { return Memory::ReadUnchecked_U16(kParams + off + (hi ? 2 : 0)); };
+	const bool debug = Memory::ReadUnchecked_U32(kParams + 0x18) != 0;
+
+	auto apply = [&](float level, float lMul, float rMul) {
+		level = std::clamp(level, 0.0f, 1.0f);
+		const u16 l = (u16)(std::clamp(level * lMul, 0.0f, 1.0f) * 65535.0f);
+		const u16 r = (u16)(std::clamp(level * rMul, 0.0f, 1.0f) * 65535.0f);
+		// The Android side samples once per UI frame, so the value must persist a few frames (slow fade).
+		if (l > leftVibration) { leftVibration = l; vibrationLeftDropout = 192; }
+		if (r > rightVibration) { rightVibration = r; vibrationRightDropout = 192; }
+	};
+
+	// One-shot pack events: the cheat's hook stores 1 (jump pack) or 2 (jet pack) at kPackEventAddr.
 	struct PackPattern { int steps; int stepFrames; float level[5]; float left; float right; };
 	static const PackPattern kPatterns[2] = {
 		{ 3, 3, { 1.0f, 0.5f, 0.25f }, 0.40f, 0.90f },             // jump pack: quick snap
@@ -443,25 +460,30 @@ static void UpdateStarWarsEliteSquadronRumble() {
 		Memory::WriteUnchecked_U32(0, kPackEventAddr);
 		packKind = (int)ev - 1;
 		packFrame = 0;
+		if (debug)
+			g_OSD.Show(OSDType::MESSAGE_INFO, packKind == 0 ? "Jump pack rumble" : "Jet pack rumble", 1.5f, "sw_rumble_pack");
 	}
 	if (packKind >= 0) {
 		const PackPattern &pt = kPatterns[packKind];
-		const int step = packFrame / pt.stepFrames;
+		const u32 base = packKind == 0 ? 0x08 : 0x10;
+		const int pl = param16(base, 0), pr = param16(base, 1);
+		const int pf = param16(base + 4, 0);
+		const int frames = pf > 0 ? std::min(pf, 60) : pt.stepFrames;
+		const int step = packFrame / frames;
 		if (step >= pt.steps) {
 			packKind = -1;
 		} else {
-			const u16 l = (u16)(pt.level[step] * pt.left * 65535.0f);
-			const u16 r = (u16)(pt.level[step] * pt.right * 65535.0f);
-			if (l > leftVibration) { leftVibration = l; vibrationLeftDropout = 192; }
-			if (r > rightVibration) { rightVibration = r; vibrationRightDropout = 192; }
+			apply(pt.level[step],
+				pl > 0 ? pl / 65535.0f : pt.left,
+				pr > 0 ? pr / 65535.0f : pt.right);
 			packFrame++;
 		}
 	}
 
-	// Diagnostics: report whether the cheat's game-side hook is installed (checked every ~5 s, shown on change).
+	// Diagnostics (only with the debug word set): is the explosion hook installed?
 	static int diagTimer = 0;
 	static int hookState = -1;
-	if (++diagTimer >= 300) {
+	if (debug && ++diagTimer >= 300) {
 		diagTimer = 0;
 		const int st = Memory::ReadUnchecked_U32(0x089CD058) == 0x0E200C40 ? 1 : 0;
 		if (st != hookState) {
@@ -470,6 +492,7 @@ static void UpdateStarWarsEliteSquadronRumble() {
 		}
 	}
 
+	// Explosions / ship boosts / anything going through the game's camera-rumble system.
 	static float peak = 0.0f;       // strongest strength seen (slowly decays so a lone big blast doesn't dominate forever)
 	static int frame = -1;          // frames since the current event started, -1 = idle
 	static int quiet = 0;           // consecutive frames without a signal
@@ -485,27 +508,28 @@ static void UpdateStarWarsEliteSquadronRumble() {
 	peak = std::max(peak * 0.9995f, s);
 	if (frame < 0) {
 		frame = 0;
-		char msg[96];
-		snprintf(msg, sizeof(msg), "Rumble event: strength %.5f (peak %.5f)", s, peak);
-		g_OSD.Show(OSDType::MESSAGE_INFO, msg, 2.0f, "sw_rumble_evt");
+		if (debug) {
+			char msg[96];
+			snprintf(msg, sizeof(msg), "Rumble event: strength %.5f (peak %.5f)", s, peak);
+			g_OSD.Show(OSDType::MESSAGE_INFO, msg, 2.0f, "sw_rumble_evt");
+		}
 	} else {
 		frame++;
 	}
 
-	// Relative pulse shape (30,10,50,30 -> normalized), 4 frames per step, then follow the game's decay.
+	const int el = param16(0x00, 0), er = param16(0x00, 1);
+	const int ef = param16(0x04, 0), emin = param16(0x04, 1);
+	const int stepFrames = ef > 0 ? std::min(ef, 60) : 4;
+	const float floorLevel = (emin > 0 ? std::min(emin, 100) : 12) / 100.0f;
+
+	// Relative pulse shape (30,10,50,30 -> normalized), then follow the game's decay.
 	static const float shape[4] = { 0.6f, 0.2f, 1.0f, 0.6f };
-	float f = frame < 16 ? shape[frame / 4] : 0.6f;
-	float level = std::min(1.0f, s / std::max(peak, 0.0001f)) * f;
-	u16 l = (u16)(level * 65535.0f);
-	u16 r = (u16)(level * 0.6f * 65535.0f);
-	if (l > leftVibration) {
-		leftVibration = l;
-		vibrationLeftDropout = 192;  // ~3 frames to fade: the Android side samples once per UI frame, so it must persist
-	}
-	if (r > rightVibration) {
-		rightVibration = r;
-		vibrationRightDropout = 192;
-	}
+	const float f = frame < stepFrames * 4 ? shape[frame / stepFrames] : 0.6f;
+	// Compress the range so weak events (a ship boost next to a big blast) are still felt:
+	// strength ratio^0.4, with a minimum level.
+	const float ratio = std::min(1.0f, s / std::max(peak, 0.0001f));
+	const float level = std::max(std::pow(ratio, 0.4f), floorLevel) * f;
+	apply(level, el > 0 ? el / 65535.0f : 1.0f, er > 0 ? er / 65535.0f : 0.6f);
 }
 
 void __CtrlVblank() {
