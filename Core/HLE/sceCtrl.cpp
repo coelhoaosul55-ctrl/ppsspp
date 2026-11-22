@@ -471,11 +471,11 @@ static void UpdateStarWarsEliteSquadronRumble() {
 	u16 r = (u16)(level * 0.6f * 65535.0f);
 	if (l > leftVibration) {
 		leftVibration = l;
-		vibrationLeftDropout = 0;
+		vibrationLeftDropout = 192;  // ~3 frames to fade: the Android side samples once per UI frame, so it must persist
 	}
 	if (r > rightVibration) {
 		rightVibration = r;
-		vibrationRightDropout = 0;
+		vibrationRightDropout = 192;
 	}
 }
 
