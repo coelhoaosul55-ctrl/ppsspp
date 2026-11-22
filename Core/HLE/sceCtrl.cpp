@@ -34,6 +34,8 @@
 #include "Core/HLE/sceKernelInterrupt.h"
 #include "Core/HW/Display.h"
 #include "Core/System.h"
+#include "Core/Config.h"
+#include "Core/MemMap.h"
 #include "Core/MemMapHelpers.h"
 #include "Core/MIPS/MIPS.h"
 #include "Core/Replay.h"
@@ -407,6 +409,58 @@ retry:
 	}
 }
 
+
+// Star Wars Battlefront: Elite Squadron (ULUS10390) explosion rumble.
+// A small game-side hook (see the cheat file) stores, at kExplosionStrengthAddr, the strongest
+// camera-rumble strength (amplitude * distance falloff * envelope) it saw this frame. We consume it
+// here (zero it after reading), normalize it against the strongest value seen so far, and turn it
+// into a short pulse pattern on the controller motors.
+static void UpdateStarWarsEliteSquadronRumble() {
+	static const u32 kExplosionStrengthAddr = 0x08803140;
+	static bool isGame = false;
+	static std::string lastId;
+	const std::string id = g_paramSFO.GetValueString("DISC_ID");
+	if (id != lastId) {
+		lastId = id;
+		isGame = (id == "ULUS10390");
+	}
+	if (!isGame || !Memory::IsValidRange(kExplosionStrengthAddr, 4))
+		return;
+
+	static float peak = 0.0f;       // strongest strength seen (slowly decays so a lone big blast doesn't dominate forever)
+	static int frame = -1;          // frames since the current event started, -1 = idle
+	static int quiet = 0;           // consecutive frames without a signal
+	const float s = Memory::ReadUnchecked_Float(kExplosionStrengthAddr);
+	Memory::WriteUnchecked_U32(0, kExplosionStrengthAddr);
+
+	if (!(s > 0.0001f) || !std::isfinite(s)) {
+		if (++quiet > 6)
+			frame = -1;
+		return;
+	}
+	quiet = 0;
+	peak = std::max(peak * 0.9995f, s);
+	if (frame < 0)
+		frame = 0;
+	else
+		frame++;
+
+	// Relative pulse shape (30,10,50,30 -> normalized), 4 frames per step, then follow the game's decay.
+	static const float shape[4] = { 0.6f, 0.2f, 1.0f, 0.6f };
+	float f = frame < 16 ? shape[frame / 4] : 0.6f;
+	float level = std::min(1.0f, s / std::max(peak, 0.0001f)) * f;
+	u16 l = (u16)(level * 65535.0f);
+	u16 r = (u16)(level * 0.6f * 65535.0f);
+	if (l > leftVibration) {
+		leftVibration = l;
+		vibrationLeftDropout = 0;
+	}
+	if (r > rightVibration) {
+		rightVibration = r;
+		vibrationRightDropout = 0;
+	}
+}
+
 void __CtrlVblank() {
 	emuRapidFireFrames++;
 	if (emuRapidFireFrames >= emuRapidFireInterval) {
@@ -417,6 +471,8 @@ void __CtrlVblank() {
 	// Reduce gamepad Vibration by set % each frame
 	leftVibration *= (float)vibrationLeftDropout / 256.0f;
 	rightVibration *= (float)vibrationRightDropout / 256.0f;
+
+	UpdateStarWarsEliteSquadronRumble();
 
 	// This always runs, so make sure we're in vblank mode.
 	if (ctrlCycle == 0)
