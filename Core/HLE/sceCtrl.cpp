@@ -35,6 +35,7 @@
 #include "Core/HW/Display.h"
 #include "Core/System.h"
 #include "Core/Config.h"
+#include "Common/System/OSD.h"
 #include "Core/ELF/ParamSFO.h"
 #include "Core/MemMap.h"
 #include "Core/MemMapHelpers.h"
@@ -428,23 +429,39 @@ static void UpdateStarWarsEliteSquadronRumble() {
 	if (!isGame || !Memory::IsValidRange(kExplosionStrengthAddr, 4))
 		return;
 
+	// Diagnostics: report whether the cheat's game-side hook is installed (checked every ~5 s, shown on change).
+	static int diagTimer = 0;
+	static int hookState = -1;
+	if (++diagTimer >= 300) {
+		diagTimer = 0;
+		const int st = Memory::ReadUnchecked_U32(0x089CD058) == 0x0E200C40 ? 1 : 0;
+		if (st != hookState) {
+			hookState = st;
+			g_OSD.Show(OSDType::MESSAGE_INFO, st ? "Explosion rumble hook: ACTIVE" : "Explosion rumble hook: NOT installed (enable the cheat)", 4.0f, "sw_rumble_hook");
+		}
+	}
+
 	static float peak = 0.0f;       // strongest strength seen (slowly decays so a lone big blast doesn't dominate forever)
 	static int frame = -1;          // frames since the current event started, -1 = idle
 	static int quiet = 0;           // consecutive frames without a signal
 	const float s = Memory::ReadUnchecked_Float(kExplosionStrengthAddr);
 	Memory::WriteUnchecked_U32(0, kExplosionStrengthAddr);
 
-	if (!(s > 0.0001f) || !std::isfinite(s)) {
+	if (!(s > 0.0f) || !std::isfinite(s)) {
 		if (++quiet > 6)
 			frame = -1;
 		return;
 	}
 	quiet = 0;
 	peak = std::max(peak * 0.9995f, s);
-	if (frame < 0)
+	if (frame < 0) {
 		frame = 0;
-	else
+		char msg[96];
+		snprintf(msg, sizeof(msg), "Rumble event: strength %.5f (peak %.5f)", s, peak);
+		g_OSD.Show(OSDType::MESSAGE_INFO, msg, 2.0f, "sw_rumble_evt");
+	} else {
 		frame++;
+	}
 
 	// Relative pulse shape (30,10,50,30 -> normalized), 4 frames per step, then follow the game's decay.
 	static const float shape[4] = { 0.6f, 0.2f, 1.0f, 0.6f };
