@@ -495,15 +495,9 @@ static void UpdateStarWarsEliteSquadronRumble() {
 			shipFrame = 0;
 	}
 	if (shipFrame >= 0) {
-		// Each shot keeps the motors running for "hold" frames, so holding the trigger gives a continuous
-		// rumble instead of separated ticks; it fades over the last 3 frames after the final shot.
 		const int sl = param16(0x20, 0), sr = param16(0x20, 1);
-		int hold = (int)Memory::ReadUnchecked_U32(kParams + 0x2C);
-		hold = hold <= 0 ? 10 : std::min(hold, 60);
-		if (shipFrame < hold) {
-			const int left = hold - shipFrame;
-			const float fade = left >= 3 ? 1.0f : left / 3.0f;
-			apply(fade, sl > 0 ? sl / 65535.0f : 0.25f, sr > 0 ? sr / 65535.0f : 0.5f, g_Config.iRumbleShip);
+		if (shipFrame < 2) {
+			apply(1.0f, sl > 0 ? sl / 65535.0f : 0.25f, sr > 0 ? sr / 65535.0f : 0.5f, g_Config.iRumbleShip);
 			shipFrame++;
 		} else {
 			shipFrame = -1;
