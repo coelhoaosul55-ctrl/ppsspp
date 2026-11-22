@@ -425,6 +425,7 @@ static void UpdateStarWarsEliteSquadronRumble() {
 	//   +0x08 jump pack  [L u16][R u16]                          +0x0C [frames/step u16][unused]
 	//   +0x10 jet pack   [L u16][R u16]                          +0x14 [frames/step u16][unused]
 	//   +0x18 debug on-screen messages (non-zero = on)
+	//   +0x1C ship-fire button mask (PSP button bits; 0 = default R+Cross)   +0x20 ship fire [L u16][R u16] strength
 	static const u32 kParams = 0x08803180;
 	static bool isGame = false;
 	static std::string lastId;
@@ -433,7 +434,7 @@ static void UpdateStarWarsEliteSquadronRumble() {
 		lastId = id;
 		isGame = (id == "ULUS10390");
 	}
-	if (!isGame || !Memory::IsValidRange(kParams, 0x20))
+	if (!isGame || !Memory::IsValidRange(kParams, 0x30))
 		return;
 
 	auto param16 = [&](u32 off, int hi) -> int { return Memory::ReadUnchecked_U16(kParams + off + (hi ? 2 : 0)); };
@@ -477,6 +478,28 @@ static void UpdateStarWarsEliteSquadronRumble() {
 				pl > 0 ? pl / 65535.0f : pt.left,
 				pr > 0 ? pr / 65535.0f : pt.right);
 			packFrame++;
+		}
+	}
+
+	// Vehicle weapon fire: the cheat hook flags that *some* vehicle fired a weapon (AI included), so we only
+	// vibrate while the player is holding a fire button. Event word: kShipFireAddr.
+	static const u32 kShipFireAddr = 0x08803154;
+	static int shipFrame = -1;
+	if (Memory::ReadUnchecked_U32(kShipFireAddr) != 0) {
+		Memory::WriteUnchecked_U32(0, kShipFireAddr);
+		u32 mask = Memory::ReadUnchecked_U32(kParams + 0x1C);
+		if (mask == 0)
+			mask = CTRL_RTRIGGER | CTRL_CROSS;
+		if (__CtrlPeekButtons() & mask)
+			shipFrame = 0;
+	}
+	if (shipFrame >= 0) {
+		const int sl = param16(0x20, 0), sr = param16(0x20, 1);
+		if (shipFrame < 2) {
+			apply(1.0f, sl > 0 ? sl / 65535.0f : 0.25f, sr > 0 ? sr / 65535.0f : 0.5f);
+			shipFrame++;
+		} else {
+			shipFrame = -1;
 		}
 	}
 
