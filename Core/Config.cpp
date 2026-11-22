@@ -1038,6 +1038,16 @@ static constexpr ConfigSetting graphicsSettings[] = {
 	ConfigSetting("PerformanceHints", SETTING(g_Config, bPerformanceHints), true, CfgFlag::DEFAULT)
 		.Label(I18NCat::SYSTEM, "Performance hints (avoid slowdown without touch)"),
 
+	ConfigSetting("RumbleShot", SETTING(g_Config, iRumbleShot), 100, CfgFlag::DEFAULT)
+		.Label(I18NCat::CONTROLS, "Vibration: gunshots").Range(0, 200).Units("%").ZeroLabel("Off"),
+	ConfigSetting("RumbleExplosion", SETTING(g_Config, iRumbleExplosion), 100, CfgFlag::DEFAULT)
+		.Label(I18NCat::CONTROLS, "Vibration: explosions and boosts").Range(0, 200).Units("%").ZeroLabel("Off"),
+	ConfigSetting("RumbleJetpack", SETTING(g_Config, iRumbleJetpack), 100, CfgFlag::DEFAULT)
+		.Label(I18NCat::CONTROLS, "Vibration: jet pack").Range(0, 200).Units("%").ZeroLabel("Off"),
+	ConfigSetting("RumbleJumppack", SETTING(g_Config, iRumbleJumppack), 100, CfgFlag::DEFAULT)
+		.Label(I18NCat::CONTROLS, "Vibration: jump pack").Range(0, 200).Units("%").ZeroLabel("Off"),
+	ConfigSetting("RumbleShip", SETTING(g_Config, iRumbleShip), 100, CfgFlag::DEFAULT)
+		.Label(I18NCat::CONTROLS, "Vibration: ship weapons").Range(0, 200).Units("%").ZeroLabel("Off"),
 	ConfigSetting("GamepadRumble", SETTING(g_Config, iGamepadRumble), 100, CfgFlag::DEFAULT)
 		.Label(I18NCat::CONTROLS, "Controller vibration").Range(0, 100).Units("%").ZeroLabel("Off"),
 

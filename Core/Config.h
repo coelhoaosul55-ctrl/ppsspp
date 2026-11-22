@@ -346,6 +346,11 @@ public:
 
 	bool bSustainedPerformanceMode;  // Android: Slows clocks down to avoid overheating/speed fluctuations.
 	bool bPerformanceHints;
+	int iRumbleShot;       // per-event strength, 0-200 %
+	int iRumbleExplosion;
+	int iRumbleJetpack;
+	int iRumbleJumppack;
+	int iRumbleShip;
 	int iGamepadRumble;  // 0-100 %, scales controller vibration (Android)  // Android 13+: ADPF hint sessions for the emu and render threads, to stop clocks dropping when idle (no touch).
 
 	bool bShowImDebugger;

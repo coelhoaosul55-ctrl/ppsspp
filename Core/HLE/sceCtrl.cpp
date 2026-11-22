@@ -440,8 +440,8 @@ static void UpdateStarWarsEliteSquadronRumble() {
 	auto param16 = [&](u32 off, int hi) -> int { return Memory::ReadUnchecked_U16(kParams + off + (hi ? 2 : 0)); };
 	const bool debug = Memory::ReadUnchecked_U32(kParams + 0x18) != 0;
 
-	auto apply = [&](float level, float lMul, float rMul) {
-		level = std::clamp(level, 0.0f, 1.0f);
+	auto apply = [&](float level, float lMul, float rMul, int percent) {
+		level = std::clamp(level * percent / 100.0f, 0.0f, 1.0f);
 		const u16 l = (u16)(std::clamp(level * lMul, 0.0f, 1.0f) * 65535.0f);
 		const u16 r = (u16)(std::clamp(level * rMul, 0.0f, 1.0f) * 65535.0f);
 		// The Android side samples once per UI frame, so the value must persist a few frames (slow fade).
@@ -476,7 +476,8 @@ static void UpdateStarWarsEliteSquadronRumble() {
 		} else {
 			apply(pt.level[step],
 				pl > 0 ? pl / 65535.0f : pt.left,
-				pr > 0 ? pr / 65535.0f : pt.right);
+				pr > 0 ? pr / 65535.0f : pt.right,
+				packKind == 0 ? g_Config.iRumbleJumppack : g_Config.iRumbleJetpack);
 			packFrame++;
 		}
 	}
@@ -496,7 +497,7 @@ static void UpdateStarWarsEliteSquadronRumble() {
 	if (shipFrame >= 0) {
 		const int sl = param16(0x20, 0), sr = param16(0x20, 1);
 		if (shipFrame < 2) {
-			apply(1.0f, sl > 0 ? sl / 65535.0f : 0.25f, sr > 0 ? sr / 65535.0f : 0.5f);
+			apply(1.0f, sl > 0 ? sl / 65535.0f : 0.25f, sr > 0 ? sr / 65535.0f : 0.5f, g_Config.iRumbleShip);
 			shipFrame++;
 		} else {
 			shipFrame = -1;
@@ -552,7 +553,7 @@ static void UpdateStarWarsEliteSquadronRumble() {
 	// strength ratio^0.4, with a minimum level.
 	const float ratio = std::min(1.0f, s / std::max(peak, 0.0001f));
 	const float level = std::max(std::pow(ratio, 0.4f), floorLevel) * f;
-	apply(level, el > 0 ? el / 65535.0f : 1.0f, er > 0 ? er / 65535.0f : 0.6f);
+	apply(level, el > 0 ? el / 65535.0f : 1.0f, er > 0 ? er / 65535.0f : 0.6f, g_Config.iRumbleExplosion);
 }
 
 void __CtrlVblank() {

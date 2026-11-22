@@ -77,6 +77,12 @@ void BuildControlsSettings(SettingsPage *page) {
 
 #if PPSSPP_PLATFORM(ANDROID)
 	page->Setting(&g_Config.iGamepadRumble);
+	page->Setting(&g_Config.iRumbleShot);
+	page->Setting(&g_Config.iRumbleExplosion);
+	page->Setting(&g_Config.iRumbleJetpack);
+	page->Setting(&g_Config.iRumbleJumppack);
+	page->Setting(&g_Config.iRumbleShip);
+
 #endif
 
 	page->Header("Analog to digital mapping");

@@ -904,12 +904,12 @@ void CWCheatEngine::ExecuteOp(const CheatOperation &op, const CheatCode &cheat, 
 			// Fork behavior: the request is consumed (zeroed) once read, so a game-side hook can fire a
 			// one-shot pulse (a gunshot, say) by writing the words, instead of re-triggering every frame.
 			if (checkLeftVibration > 0) {
-				SetLeftVibration(checkLeftVibration);
+				SetLeftVibration((u16)std::min(65535, checkLeftVibration * g_Config.iRumbleShot / 100));
 				SetVibrationLeftDropout(Memory::ReadUnchecked_U8(op.addr + 0x4));
 				Memory::WriteUnchecked_U16(0, op.addr);
 			}
 			if (checkRightVibration > 0) {
-				SetRightVibration(checkRightVibration);
+				SetRightVibration((u16)std::min(65535, checkRightVibration * g_Config.iRumbleShot / 100));
 				SetVibrationRightDropout(Memory::ReadUnchecked_U8(op.addr + 0x6));
 				Memory::WriteUnchecked_U16(0, op.addr + 0x2);
 			}
