@@ -425,7 +425,7 @@ static void UpdateStarWarsEliteSquadronRumble() {
 	//   +0x08 jump pack  [L u16][R u16]                          +0x0C [frames/step u16][unused]
 	//   +0x10 jet pack   [L u16][R u16]                          +0x14 [frames/step u16][unused]
 	//   +0x18 debug on-screen messages (non-zero = on)
-	//   +0x1C ship-fire button mask (PSP button bits; 0 = default R+Cross)   +0x20 ship fire [L u16][R u16] strength
+	//   +0x1C ship-fire button mask (PSP button bits; 0 = default R)   +0x20 ship fire [L u16][R u16] strength
 	static const u32 kParams = 0x08803180;
 	static bool isGame = false;
 	static std::string lastId;
@@ -485,22 +485,22 @@ static void UpdateStarWarsEliteSquadronRumble() {
 	// Vehicle weapon fire: the cheat hook flags that *some* vehicle fired a weapon (AI included), so we only
 	// vibrate while the player is holding a fire button. Event word: kShipFireAddr.
 	static const u32 kShipFireAddr = 0x08803154;
-	static int shipFrame = -1;
 	if (Memory::ReadUnchecked_U32(kShipFireAddr) != 0) {
 		Memory::WriteUnchecked_U32(0, kShipFireAddr);
 		u32 mask = Memory::ReadUnchecked_U32(kParams + 0x1C);
 		if (mask == 0)
-			mask = CTRL_RTRIGGER | CTRL_CROSS;
-		if (__CtrlPeekButtons() & mask)
-			shipFrame = 0;
-	}
-	if (shipFrame >= 0) {
-		const int sl = param16(0x20, 0), sr = param16(0x20, 1);
-		if (shipFrame < 2) {
-			apply(1.0f, sl > 0 ? sl / 65535.0f : 0.25f, sr > 0 ? sr / 65535.0f : 0.5f, g_Config.iRumbleShip);
-			shipFrame++;
-		} else {
-			shipFrame = -1;
+			mask = CTRL_RTRIGGER;
+		if (__CtrlPeekButtons() & mask) {
+			// One pulse per shot, identical to the infantry gunshot (CwCheat A1 request: L 0x5000, R 0x7000,
+			// dropout 0xA0), scaled by the ship-weapons slider. Strength can be overridden at params+0x20.
+			int sl = param16(0x20, 0), sr = param16(0x20, 1);
+			if (sl <= 0) sl = 0x5000;
+			if (sr <= 0) sr = 0x7000;
+			const int pct = g_Config.iRumbleShip;
+			leftVibration = (u16)std::min(65535, sl * pct / 100);
+			rightVibration = (u16)std::min(65535, sr * pct / 100);
+			vibrationLeftDropout = 0xA0;
+			vibrationRightDropout = 0xA0;
 		}
 	}
 
