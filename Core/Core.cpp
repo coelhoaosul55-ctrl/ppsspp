@@ -48,6 +48,9 @@
 #include "Core/HLE/sceKernelThread.h"
 #include "Core/MIPS/MIPSTracer.h"
 #include "Core/CoreTiming.h"
+#include "Core/ELF/ParamSFO.h"
+#include "Core/Util/PathUtil.h"
+#include "Common/File/FileUtil.h"
 
 #include "GPU/Debugger/Stepping.h"
 #include "GPU/GPU.h"
@@ -1008,6 +1011,63 @@ void Core_MemoryExceptionHLE(MIPSState *mips, u32 address, u32 accessSize, Memor
 	}
 }
 
+
+// Personal debugging aid for Star Wars Battlefront: Elite Squadron (ULUS10390): when the game jumps
+// somewhere invalid, write a report (registers, stack, memory behind every pointer register, the
+// small heap that follows the module) so the corrupted pointer can be traced back offline.
+static void DumpEliteSquadronCrash(u32 address, u32 pc, const char *what) {
+	if (g_paramSFO.GetValueString("DISC_ID") != "ULUS10390" || !currentMIPS)
+		return;
+	std::string out;
+	auto add = [&](const char *fmt, auto... a) { out += StringFromFormat(fmt, a...); };
+	auto hexdump = [&](u32 start, u32 len) {
+		if (!Memory::IsValidRange(start, len)) {
+			add("  [%08x..+%x invalid]\n", start, len);
+			return;
+		}
+		for (u32 a = start; a < start + len; a += 16) {
+			add("%08x:", a);
+			for (u32 k = 0; k < 16; k += 4)
+				add(" %08x", Memory::ReadUnchecked_U32(a + k));
+			add("\n");
+		}
+	};
+	SceUID tid = __KernelGetCurThread();
+	add("=== Elite Squadron crash report ===\n%s target=%08x pc=%08x\n", what, address, pc);
+	add("thread %d '%s'\n", (int)tid, __KernelGetThreadName(tid) ? __KernelGetThreadName(tid) : "?");
+	add("module base 0x08804000, module end 0x08DDD914\n");
+	for (int i = 0; i < 32; i++)
+		add("r%-2d=%08x%s", i, currentMIPS->r[i], (i % 4 == 3) ? "\n" : "  ");
+	add("hi=%08x lo=%08x\n", currentMIPS->hi, currentMIPS->lo);
+	u32 sp = currentMIPS->r[MIPS_REG_SP];
+	add("\n--- stack from sp=%08x (256 words) ---\n", sp);
+	hexdump(sp & ~0xF, 0x400);
+	add("\n--- memory at each valid pointer register (+-0x40) ---\n");
+	for (int i = 1; i < 32; i++) {
+		u32 v = currentMIPS->r[i];
+		if (v >= 0x08000040 && v < 0x0BFFFFC0) {
+			add("r%d=%08x\n", i, v);
+			hexdump((v - 0x40) & ~0xF, 0x80);
+		}
+	}
+	add("\n--- bytes around the target (%08x) ---\n", address);
+	if (address >= 0x08000100 && address < 0x0BFFFF00)
+		hexdump((address - 0x100) & ~0xF, 0x200);
+	add("\n--- small heap after the module (08dde000, 4KB) ---\n");
+	hexdump(0x08dde000, 0x1000);
+	add("\n--- end of module BSS (08ddc000..08dde000) ---\n");
+	hexdump(0x08ddc000, 0x2000);
+
+	Path dir = GetSysDirectory(DIRECTORY_SYSTEM);
+	Path file = dir / "crash_ULUS10390.txt";
+	File::WriteDataToFile(false, out.data(), out.size(), file);
+	ERROR_LOG(Log::CPU, "Elite Squadron crash report written to %s", file.c_str());
+	// Also into the log (first part: registers + start of the stack), in case the file can't be reached.
+	size_t cut = out.find("--- memory at each valid pointer");
+	std::string head = out.substr(0, cut == std::string::npos ? out.size() : cut);
+	ERROR_LOG(Log::CPU, "%s", head.c_str());
+}
+
 // Can't be ignored, must break. If JUMP, not sure we can get a meaningful stack trace here (since the PC is invalid).
 // address != pc when this is called for a jump instruction. pc then is the source address of the jump.
 void Core_ExecException(u32 address, u32 pc, ExecExceptionType type) {
@@ -1064,6 +1124,8 @@ void Core_ExecException(u32 address, u32 pc, ExecExceptionType type) {
 	} else {
 		Core_SendDebugOutput(LogLevel::LERROR, StringFromFormat("%s\nMIPS call stack:\n%s", msg, stackTrace.c_str()));
 	}
+
+	DumpEliteSquadronCrash(address, pc, desc);
 
 	MIPSExceptionInfo e{};
 	e.type = MIPSExceptionType::BAD_EXEC_ADDR;
