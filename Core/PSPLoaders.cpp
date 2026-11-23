@@ -169,6 +169,15 @@ void InitMemorySizeForGame() {
 	if (g_paramSFO.IsValid()) {
 		UseLargeMem(g_paramSFO.GetValueInt("MEMSIZE"));
 		gameID = g_paramSFO.GetValueString("DISC_ID");
+
+		// Fork: Star Wars Battlefront: Elite Squadron gets the PSP-2000's extra 32MB (0x0A000000-0x0BFFFFFF)
+		// mapped but outside the user partition, so the game sees exactly the same memory as before and the
+		// top of RAM is free for mod code/data (same approach as for homebrew PBPs).
+		if (gameID == "ULUS10390" && Memory::g_PSPModel != PSP_MODEL_FAT && Memory::g_MemorySize == Memory::RAM_NORMAL_SIZE) {
+			INFO_LOG(Log::Loader, "Elite Squadron: mapping the extra 32MB of RAM outside the user partition (mod memory)");
+			Memory::g_MemorySize = Memory::RAM_DOUBLE_SIZE;
+			Memory::g_UserPartitionSize = Memory::RAM_NORMAL_SIZE;
+		}
 	}
 
 	for (size_t i = 0; i < g_HDRemastersCount; i++) {
