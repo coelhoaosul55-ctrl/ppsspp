@@ -1039,6 +1039,13 @@ static void DumpEliteSquadronCrash(u32 address, u32 pc, const char *what) {
 	for (int i = 0; i < 32; i++)
 		add("r%-2d=%08x%s", i, currentMIPS->r[i], (i % 4 == 3) ? "\n" : "  ");
 	add("hi=%08x lo=%08x\n", currentMIPS->hi, currentMIPS->lo);
+	{
+		const u32 ls = 0x08C5A430 + 0x1813b0;
+		if (Memory::IsValidRange(ls, 16))
+			add("GE list state: cur=%08x end=%08x start=%08x (used %d of 196608)\n", Memory::ReadUnchecked_U32(ls),
+				Memory::ReadUnchecked_U32(ls + 4), Memory::ReadUnchecked_U32(ls + 8),
+				(int)(Memory::ReadUnchecked_U32(ls) - Memory::ReadUnchecked_U32(ls + 8)));
+	}
 	u32 sp = currentMIPS->r[MIPS_REG_SP];
 	add("\n--- stack from sp=%08x (256 words) ---\n", sp);
 	hexdump(sp & ~0xF, 0x400);

@@ -42,6 +42,9 @@
 #include "Core/MIPS/MIPS.h"
 #include "Core/Replay.h"
 #include "Core/Util/AudioFormat.h"  // for clamp_u8
+#include "Core/Util/PathUtil.h"
+#include "Common/File/FileUtil.h"
+#include "Common/StringUtils.h"
 
 /* Index for the two analog directions */
 #define CTRL_ANALOG_X   0
@@ -417,6 +420,58 @@ retry:
 // camera-rumble strength (amplitude * distance falloff * envelope) it saw this frame. We consume it
 // here (zero it after reading), normalize it against the strongest value seen so far, and turn it
 // into a short pulse pattern on the controller motors.
+
+// Personal debugging aid for Star Wars Battlefront: Elite Squadron (ULUS10390): the game draws through two
+// fixed-size (0x30000 byte) GE display lists and only checks for overflow after the frame. This watches how
+// full they get (the lists are never cleared, so the highest non-zero word is the peak since boot) and writes
+// the numbers to PSP/SYSTEM/ge_list_peak_ULUS10390.txt.
+static void MonitorEliteSquadronGeList() {
+	static const u32 kListState = 0x08C5A430 + 0x1813b0;  // [0]=current [4]=end [8]=start
+	static const u32 kList[2] = { 0x08C5A430 + 0x5f390, 0x08C5A430 + 0x8f390 };
+	static const u32 kListSize = 0x30000;
+	static int counter = 0;
+	static u32 reported = 0;
+	static std::vector<std::string> history;
+	static bool isGame = false;
+	static std::string lastId;
+	const std::string id = g_paramSFO.GetValueString("DISC_ID");
+	if (id != lastId) {
+		lastId = id;
+		isGame = (id == "ULUS10390");
+		reported = 0;
+		history.clear();
+		counter = 0;
+	}
+	if (!isGame || ++counter < 30)
+		return;
+	counter = 0;
+	if (!Memory::IsValidRange(kListState, 16) || !Memory::IsValidRange(kList[1], kListSize))
+		return;
+
+	u32 peak[2];
+	for (int i = 0; i < 2; i++) {
+		const u32 *w = (const u32 *)Memory::GetPointerUnchecked(kList[i]);
+		u32 n = kListSize / 4;
+		while (n > 0 && w[n - 1] == 0)
+			n--;
+		peak[i] = n * 4;
+	}
+	const u32 maxPeak = std::max(peak[0], peak[1]);
+	if (maxPeak < reported + 0x1000)
+		return;
+	reported = maxPeak;
+	const u32 cur = Memory::ReadUnchecked_U32(kListState);
+	const u32 start = Memory::ReadUnchecked_U32(kListState + 8);
+	history.push_back(StringFromFormat("list0 peak=%u list1 peak=%u of %u (%.1f%%)  now: cur=%08x start=%08x used=%d",
+		peak[0], peak[1], kListSize, 100.0 * maxPeak / kListSize, cur, start, (int)(cur - start)));
+	if (history.size() > 300)
+		history.erase(history.begin());
+	std::string out = "Elite Squadron GE display list usage (peak since boot, rewritten as it grows)\n";
+	for (const auto &l : history)
+		out += l + "\n";
+	File::WriteDataToFile(false, out.data(), out.size(), GetSysDirectory(DIRECTORY_SYSTEM) / "ge_list_peak_ULUS10390.txt");
+}
+
 static void UpdateStarWarsEliteSquadronRumble() {
 	static const u32 kExplosionStrengthAddr = 0x08803140;
 	static const u32 kPackEventAddr = 0x08803150;
@@ -568,6 +623,7 @@ void __CtrlVblank() {
 	rightVibration *= (float)vibrationRightDropout / 256.0f;
 
 	UpdateStarWarsEliteSquadronRumble();
+	MonitorEliteSquadronGeList();
 
 	// This always runs, so make sure we're in vblank mode.
 	if (ctrlCycle == 0)
