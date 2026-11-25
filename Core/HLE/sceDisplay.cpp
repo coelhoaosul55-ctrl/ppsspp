@@ -147,7 +147,12 @@ static double lagSyncBehindSecondStart = 0.0;
 static std::atomic<int> lagSyncBehindPeakUs{};
 
 static int numSkippedFrames;
-static int percentSkipAccum;
+// Adaptive percent frameskip state.
+static double percentSkipAccum;
+static double percentSkipFrac;
+static double percentWindowStart;
+static double percentWindowTarget;
+static double percentWindowIdle;
 static bool hasSetMode;
 static int resumeMode;
 static int holdMode;
@@ -297,7 +302,11 @@ void __DisplayInit() {
 	width = 480;
 	height = 272;
 	numSkippedFrames = 0;
-	percentSkipAccum = 0;
+	percentSkipAccum = 0.0;
+	percentSkipFrac = 0.0;
+	percentWindowStart = 0.0;
+	percentWindowTarget = 0.0;
+	percentWindowIdle = 0.0;
 	numVBlanksSinceFlip = 0;
 	flippedThisFrame = false;
 	framebufIsLatched = false;
@@ -602,11 +611,33 @@ static void DoFrameTiming(bool throttle, bool *skipFrame, float scaledTimestep, 
 			*skipFrame = true;
 		}
 	} else if (g_Config.UsePercentFrameSkip()) {
-		// The setting is the percentage of game frames that get drawn; the remaining ones are skipped, spread evenly.
-		// 90% = skip 10% (3 frames out of every 30 at 30 fps), 50% = draw one, skip one.
-		percentSkipAccum += 100 - std::clamp(g_Config.iFrameSkipPercent, 10, 100);
-		if (percentSkipAccum >= 100) {
-			percentSkipAccum -= 100;
+		// Adaptive percent frameskip: measure how fast emulation really runs (game time per busy wall-clock time,
+		// so time spent waiting for the frame limiter doesn't count) and skip a proportional share of the frames to
+		// get back to 100%. At 90% speed it skips 10% (3 of every 30 frames at 30 fps), spread evenly.
+		// The setting is the most frames that may be skipped this way.
+		const double maxFrac = std::clamp(g_Config.iFrameSkipPercent, 0, 90) / 100.0;
+		if (percentWindowStart == 0.0 || wasPaused || lastFrameTime == 0.0) {
+			percentWindowStart = curFrameTime;
+			percentWindowTarget = 0.0;
+			percentWindowIdle = 0.0;
+		} else {
+			percentWindowTarget += scaledTimestep;
+			const double wall = curFrameTime - percentWindowStart;
+			if (wall >= 0.25) {
+				const double busy = std::max(wall - percentWindowIdle, 0.001);
+				const double speed = percentWindowTarget / busy;  // 1.0 = exactly real time, >1 = headroom.
+				// Behind -> skip more (1 - speed), with headroom -> skip less. Half a step per window to avoid hunting.
+				const double err = std::clamp(1.0 - speed, -0.1, 0.5);
+				percentSkipFrac = std::clamp(percentSkipFrac + 0.5 * err, 0.0, maxFrac);
+				percentWindowStart = curFrameTime;
+				percentWindowTarget = 0.0;
+				percentWindowIdle = 0.0;
+			}
+		}
+		percentSkipFrac = std::min(percentSkipFrac, maxFrac);
+		percentSkipAccum += percentSkipFrac;
+		if (percentSkipAccum >= 1.0) {
+			percentSkipAccum -= 1.0;
 			*skipFrame = true;
 		}
 	} else {
@@ -628,6 +659,7 @@ static void DoFrameTiming(bool throttle, bool *skipFrame, float scaledTimestep, 
 			nextFrameTime = curFrameTime;
 		} else {
 			lagSyncWindowIdle += nextFrameTime - curFrameTime;
+			percentWindowIdle += nextFrameTime - curFrameTime;
 			// Wait until we've caught up.
 			// If we're ending the frame here, we'll defer the sleep until after the command buffers
 			// have been handed off to the render thread, for some more overlap.
@@ -932,7 +964,7 @@ void __DisplayFlip(int cyclesLate) {
 	int maxFrameskip = 8;
 	const int frameSkipNum = g_Config.iFrameSkip;
 	if (g_Config.UsePercentFrameSkip()) {
-		// Never skip more than 9 frames in a row (the lowest setting, 10% drawn, skips 9 of every 10).
+		// Never skip more than 9 frames in a row (the most it can ask for is 90%).
 		maxFrameskip = 9;
 	} else if (throttle) {
 		// 4 here means 1 drawn, 4 skipped - so 12 fps minimum.

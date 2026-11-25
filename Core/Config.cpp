@@ -992,8 +992,8 @@ static constexpr ConfigSetting graphicsSettings[] = {
 		.Label(I18NCat::GRAPHICS, "Frame Skipping").Choices(frameSkipNames),
 	ConfigSetting("FrameSkipType", SETTING(g_Config, iFrameSkipType), 0, CfgFlag::PER_GAME | CfgFlag::REPORT)
 		.Label(I18NCat::GRAPHICS, "Frame Skipping Type").Choices(frameSkipTypeNames),
-	ConfigSetting("FrameSkipDrawPercent", SETTING(g_Config, iFrameSkipPercent), 100, CfgFlag::PER_GAME | CfgFlag::REPORT)
-		.Label(I18NCat::GRAPHICS, "Frame Skipping Percent", "Percent of frames drawn (the rest are skipped)").Range(10, 100, 5).Units("%"),
+	ConfigSetting("FrameSkipMaxPercent", SETTING(g_Config, iFrameSkipPercent), 0, CfgFlag::PER_GAME | CfgFlag::REPORT)
+		.Label(I18NCat::GRAPHICS, "Frame Skipping Percent", "Maximum frames skipped (adaptive)").Range(0, 90, 5).Units("%").ZeroLabel("Off"),
 	ConfigSetting("AutoFrameSkip", SETTING(g_Config, bAutoFrameSkip), false, CfgFlag::PER_GAME | CfgFlag::REPORT)
 		.Label(I18NCat::GRAPHICS, "Auto FrameSkip").OnChanged(&OnAutoFrameSkipChanged),
 	ConfigSetting("StereoRendering", SETTING(g_Config, bStereoRendering), false, CfgFlag::PER_GAME)
