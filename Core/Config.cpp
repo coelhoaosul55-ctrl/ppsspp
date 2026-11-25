@@ -924,6 +924,7 @@ static constexpr const char *internalResolutionNames[] = { "Auto (1:1)", "1x PSP
 static constexpr const char *msaaLevelNames[] = { "Off", "2x", "4x", "8x", "16x" };
 static constexpr const char *androidHwScaleNames[] = { "Native device resolution", "Same as Rendering resolution", "1x PSP", "2x PSP", "3x PSP", "4x PSP", "5x PSP" };
 static constexpr const char *frameSkipNames[] = { "Off", "1", "2", "3", "4" };
+static constexpr const char *frameSkipTypeNames[] = { "Number of frames", "Percent of frames" };
 static constexpr const char *skipGPUReadbackModeNames[] = { "No", "Skip", "Copy to texture" };
 static constexpr const char *depthRasterModeNames[] = { "Auto", "Low", "Off", "Always on" };
 static constexpr const char *frameRateLimit30Names[] = { "Auto", "Always", "Off" };
@@ -989,6 +990,10 @@ static constexpr ConfigSetting graphicsSettings[] = {
 	ConfigSetting("HighQualityDepth", SETTING(g_Config, bHighQualityDepth), true, CfgFlag::PER_GAME | CfgFlag::REPORT),
 	ConfigSetting("FrameSkip", SETTING(g_Config, iFrameSkip), 0, CfgFlag::PER_GAME | CfgFlag::REPORT)
 		.Label(I18NCat::GRAPHICS, "Frame Skipping").Choices(frameSkipNames),
+	ConfigSetting("FrameSkipType", SETTING(g_Config, iFrameSkipType), 0, CfgFlag::PER_GAME | CfgFlag::REPORT)
+		.Label(I18NCat::GRAPHICS, "Frame Skipping Type").Choices(frameSkipTypeNames),
+	ConfigSetting("FrameSkipPercent", SETTING(g_Config, iFrameSkipPercent), 0, CfgFlag::PER_GAME | CfgFlag::REPORT)
+		.Label(I18NCat::GRAPHICS, "Frame Skipping Percent", "Frames to skip").Range(0, 90, 5).Units("%").ZeroLabel("Off"),
 	ConfigSetting("AutoFrameSkip", SETTING(g_Config, bAutoFrameSkip), false, CfgFlag::PER_GAME | CfgFlag::REPORT)
 		.Label(I18NCat::GRAPHICS, "Auto FrameSkip").OnChanged(&OnAutoFrameSkipChanged),
 	ConfigSetting("StereoRendering", SETTING(g_Config, bStereoRendering), false, CfgFlag::PER_GAME)

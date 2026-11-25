@@ -356,6 +356,9 @@ public:
 	bool bShowImDebugger;
 
 	int iFrameSkip;
+	// 0 = skip a fixed number of frames after each drawn frame (iFrameSkip), 1 = skip a percentage of all frames (iFrameSkipPercent).
+	int iFrameSkipType;
+	int iFrameSkipPercent;
 	bool bAutoFrameSkip;
 
 	int iWindowX;
@@ -851,6 +854,9 @@ public:
 	bool LoadAppendedConfig(bool save = true);
 	void SetAppendedConfigIni(const Path &path) { appendedConfigFileName_ = path; }
 	void UpdateAfterSettingAutoFrameSkip();
+	// True if any kind of manual/auto frameskipping is configured. Percent mode only applies when Auto FrameSkip is off.
+	bool UsePercentFrameSkip() const { return !bAutoFrameSkip && iFrameSkipType == 1; }
+	bool FrameSkipActive() const { return UsePercentFrameSkip() ? iFrameSkipPercent > 0 : iFrameSkip != 0; }
 	void NotifyUpdatedCpuCore();
 
 	PlayTimeTracker &TimeTracker() { return playTimeTracker_; }

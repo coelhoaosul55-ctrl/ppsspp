@@ -147,6 +147,7 @@ static double lagSyncBehindSecondStart = 0.0;
 static std::atomic<int> lagSyncBehindPeakUs{};
 
 static int numSkippedFrames;
+static int percentSkipAccum;
 static bool hasSetMode;
 static int resumeMode;
 static int holdMode;
@@ -296,6 +297,7 @@ void __DisplayInit() {
 	width = 480;
 	height = 272;
 	numSkippedFrames = 0;
+	percentSkipAccum = 0;
 	numVBlanksSinceFlip = 0;
 	flippedThisFrame = false;
 	framebufIsLatched = false;
@@ -573,7 +575,7 @@ static void DoFrameTiming(bool throttle, bool *skipFrame, float scaledTimestep, 
 
 	// Check if the frameskipping code should be enabled. If neither throttling or frameskipping is on,
 	// we have nothing to do here.
-	bool doFrameSkip = g_Config.iFrameSkip != 0;
+	bool doFrameSkip = g_Config.FrameSkipActive();
 	if (!throttle && !doFrameSkip)
 		return;
 
@@ -597,6 +599,13 @@ static void DoFrameTiming(bool throttle, bool *skipFrame, float scaledTimestep, 
 		// autoframeskip
 		// Argh, we are falling behind! Let's skip a frame and see if we catch up.
 		if (curFrameTime > nextFrameTime && doFrameSkip) {
+			*skipFrame = true;
+		}
+	} else if (g_Config.UsePercentFrameSkip()) {
+		// Skip a percentage of all frames, spread evenly (50% = draw one, skip one; 75% = draw one, skip three).
+		percentSkipAccum += std::clamp(g_Config.iFrameSkipPercent, 0, 95);
+		if (percentSkipAccum >= 100) {
+			percentSkipAccum -= 100;
 			*skipFrame = true;
 		}
 	} else {
@@ -836,7 +845,7 @@ void __DisplayFlip(int cyclesLate) {
 	// Also let's always flip for animated shaders.
 	bool postEffectRequiresFlip = false;
 
-	bool duplicateFrames = g_Config.bRenderDuplicateFrames && g_Config.iFrameSkip == 0;
+	bool duplicateFrames = g_Config.bRenderDuplicateFrames && !g_Config.FrameSkipActive();
 
 	if (!g_Config.bSkipBufferEffects) {
 		postEffectRequiresFlip = duplicateFrames || g_Config.bShaderChainRequires60FPS;
@@ -921,7 +930,10 @@ void __DisplayFlip(int cyclesLate) {
 
 	int maxFrameskip = 8;
 	const int frameSkipNum = g_Config.iFrameSkip;
-	if (throttle) {
+	if (g_Config.UsePercentFrameSkip()) {
+		// Never skip more than 19 frames in a row (95% is the highest percentage that can be set).
+		maxFrameskip = 19;
+	} else if (throttle) {
 		// 4 here means 1 drawn, 4 skipped - so 12 fps minimum.
 		maxFrameskip = frameSkipNum;
 	}

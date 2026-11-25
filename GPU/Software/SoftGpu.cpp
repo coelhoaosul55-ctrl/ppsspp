@@ -737,7 +737,7 @@ void SoftGPU::MarkDirty(uint32_t addr, uint32_t stride, uint32_t height, GEBuffe
 
 void SoftGPU::MarkDirty(uint32_t addr, uint32_t bytes, SoftGPUVRAMDirty value) {
 	// Only bother tracking if frameskipping.
-	if (g_Config.iFrameSkip == 0)
+	if (!g_Config.FrameSkipActive())
 		return;
 	if (!Memory::IsVRAMAddress(addr) || !Memory::IsVRAMAddress(addr + bytes - 1))
 		return;
@@ -1547,14 +1547,14 @@ bool SoftGPU::PerformWriteStencilFromMemory(u32 dest, int size, WriteStencil fla
 }
 
 bool SoftGPU::FramebufferDirty() {
-	if (g_Config.iFrameSkip != 0) {
+	if (g_Config.FrameSkipActive()) {
 		return ClearDirty(displayFramebuf_, displayStride_, 272, displayFormat_, SoftGPUVRAMDirty::DIRTY);
 	}
 	return true;
 }
 
 bool SoftGPU::FramebufferReallyDirty() {
-	if (g_Config.iFrameSkip != 0) {
+	if (g_Config.FrameSkipActive()) {
 		return ClearDirty(displayFramebuf_, displayStride_, 272, displayFormat_, SoftGPUVRAMDirty::REALLY_DIRTY);
 	}
 	return true;

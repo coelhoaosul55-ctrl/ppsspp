@@ -102,7 +102,19 @@ static void BuildSpeedHacksPage(SettingsPage *page) {
 
 	page->Header();
 
-	page->Setting(&g_Config.iFrameSkip).EnabledFunc([] {
+	SettingsPageHost *host = page->Host();
+	page->Setting(&g_Config.iFrameSkipType).EnabledFunc([] {
+		return !g_Config.bAutoFrameSkip;
+	}).OnChange([host](UI::EventParams &e) {
+		// Swap between the frame count and the percentage control.
+		host->RecreatePageViews();
+	});
+
+	page->Setting(&g_Config.iFrameSkipPercent).Visible(g_Config.UsePercentFrameSkip()).EnabledFunc([] {
+		return !g_Config.bAutoFrameSkip;
+	});
+
+	page->Setting(&g_Config.iFrameSkip).Visible(!g_Config.UsePercentFrameSkip()).EnabledFunc([] {
 		return !g_Config.bAutoFrameSkip;
 	}).Setup([](View *view) {
 		PopupMultiChoice *choice = static_cast<PopupMultiChoice *>(view);
@@ -307,7 +319,7 @@ void BuildGraphicsSettings(SettingsPage *page) {
 		}
 	}
 	page->Setting(&g_Config.bRenderDuplicateFrames).EnabledFunc([] {
-		return !g_Config.bSkipBufferEffects && g_Config.iFrameSkip == 0;
+		return !g_Config.bSkipBufferEffects && !g_Config.FrameSkipActive();
 	}).Hint({I18NCat::GRAPHICS, "RenderDuplicateFrames Tip", "Can make framerate smoother in games that run at lower framerates"});
 
 	page->Header("Frame Rate Control");
