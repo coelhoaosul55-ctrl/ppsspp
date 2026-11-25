@@ -602,8 +602,9 @@ static void DoFrameTiming(bool throttle, bool *skipFrame, float scaledTimestep, 
 			*skipFrame = true;
 		}
 	} else if (g_Config.UsePercentFrameSkip()) {
-		// Skip a percentage of all frames, spread evenly (50% = draw one, skip one; 75% = draw one, skip three).
-		percentSkipAccum += std::clamp(g_Config.iFrameSkipPercent, 0, 95);
+		// The setting is the percentage of game frames that get drawn; the remaining ones are skipped, spread evenly.
+		// 90% = skip 10% (3 frames out of every 30 at 30 fps), 50% = draw one, skip one.
+		percentSkipAccum += 100 - std::clamp(g_Config.iFrameSkipPercent, 10, 100);
 		if (percentSkipAccum >= 100) {
 			percentSkipAccum -= 100;
 			*skipFrame = true;
@@ -931,8 +932,8 @@ void __DisplayFlip(int cyclesLate) {
 	int maxFrameskip = 8;
 	const int frameSkipNum = g_Config.iFrameSkip;
 	if (g_Config.UsePercentFrameSkip()) {
-		// Never skip more than 19 frames in a row (95% is the highest percentage that can be set).
-		maxFrameskip = 19;
+		// Never skip more than 9 frames in a row (the lowest setting, 10% drawn, skips 9 of every 10).
+		maxFrameskip = 9;
 	} else if (throttle) {
 		// 4 here means 1 drawn, 4 skipped - so 12 fps minimum.
 		maxFrameskip = frameSkipNum;

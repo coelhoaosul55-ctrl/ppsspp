@@ -356,7 +356,8 @@ public:
 	bool bShowImDebugger;
 
 	int iFrameSkip;
-	// 0 = skip a fixed number of frames after each drawn frame (iFrameSkip), 1 = skip a percentage of all frames (iFrameSkipPercent).
+	// 0 = skip a fixed number of frames after each drawn frame (iFrameSkip), 1 = draw only a percentage of the frames (iFrameSkipPercent).
+	// iFrameSkipPercent is the share of game frames that are drawn (100 = all, 90 = skip 10%, i.e. 3 of every 30 frames at 30 fps).
 	int iFrameSkipType;
 	int iFrameSkipPercent;
 	bool bAutoFrameSkip;
@@ -856,7 +857,7 @@ public:
 	void UpdateAfterSettingAutoFrameSkip();
 	// True if any kind of manual/auto frameskipping is configured. Percent mode only applies when Auto FrameSkip is off.
 	bool UsePercentFrameSkip() const { return !bAutoFrameSkip && iFrameSkipType == 1; }
-	bool FrameSkipActive() const { return UsePercentFrameSkip() ? iFrameSkipPercent > 0 : iFrameSkip != 0; }
+	bool FrameSkipActive() const { return UsePercentFrameSkip() ? iFrameSkipPercent < 100 : iFrameSkip != 0; }
 	void NotifyUpdatedCpuCore();
 
 	PlayTimeTracker &TimeTracker() { return playTimeTracker_; }
